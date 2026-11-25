@@ -1,0 +1,40 @@
+# Registry of managed MCP servers for the control plane (ticket 57).
+# Copy outside the repo, e.g. /path/to/mcp-control-plane-data/registry.toml
+# Add another [[managed_servers]] block later — the UI is not hard-wired to one server.
+
+version = 1
+
+[[managed_servers]]
+id = "github-gateway"
+display_name = "GitHub MCP gateway"
+description = "Server-side GitHub Issues MCP on the gateway host: read, comment, and close on allowlisted edidasken repos. Holds the operator’s fine-grained PAT only on the host; clients use separate API keys."
+unit = "com.konnectors.github-mcp-gateway"
+# Absolute path to launchd-ctl.sh on the gateway host (filled after konnectors checkout).
+ctl_script = "/path/to/konnectors/github-gateway/scripts/launchd-ctl.sh"
+health_url = "http://127.0.0.1:8743/health"
+# Gateway config (outside git). Used to show tools + allowlisted repos — never token values.
+config_path = "/path/to/github-mcp-gateway-data/config.toml"
+# Gateway tool-call audit (JSON lines). Status page summarizes last call / recent errors.
+audit_path = "/path/to/github-mcp-gateway-data/REPLACE_ME_audit.jsonl"
+# Optional: path whose existence means "GitHub token configured" (file source). Never read contents.
+token_configured_path = "/path/to/github-mcp-gateway-data/REPLACE_ME_github-pat"
+# Optional static fallbacks if config_path is missing (dev / first boot).
+tools = [
+  "github_issue_read",
+  "github_issue_comment",
+  "github_issue_close",
+]
+allowed_repositories = ["edidasken/*"]
+
+# Example of registering a second MCP server later (commented — do not invent a live unit):
+# [[managed_servers]]
+# id = "example-other-mcp"
+# display_name = "Example other MCP"
+# description = "Plain-English description of what this server does."
+# unit = "com.konnectors.example-other-mcp"
+# ctl_script = "/path/to/launchd-ctl.sh"
+# health_url = "http://127.0.0.1:9xxx/health"
+# config_path = "/path/to/example-other-mcp-data/config.toml"
+# audit_path = "/path/to/example-other-mcp-data/audit.jsonl"
+# tools = ["example_tool"]
+# allowed_repositories = []

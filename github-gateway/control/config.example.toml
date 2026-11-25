@@ -1,0 +1,29 @@
+# MCP control plane (ticket 57 / edidasken/code#63).
+# Copy outside the repo, e.g. /path/to/mcp-control-plane-data/config.toml
+# NEVER put a real password, GitHub PAT, or client API key in this file.
+
+version = 1
+
+[listen]
+# Tailscale-only. Prefer loopback + `tailscale serve`, or bind the gateway host's 100.x address.
+# Never 0.0.0.0. Funnel / public exposure is a host-operator decision and is NOT enabled here.
+bind = "127.0.0.1"
+port = 8750
+public_exposure = "tailscale"
+funnel_acknowledged_by_operator = false
+
+[auth]
+# Hashed operator password (mode 600). Set with scripts/set-control-password.js.
+password_path = "/path/to/mcp-control-plane-data/REPLACE_ME_password.json"
+# Session store (hashed session tokens). Outside git.
+sessions_path = "/path/to/mcp-control-plane-data/REPLACE_ME_sessions.json"
+session_ttl_hours = 12
+cookie_name = "mcp_cp_session"
+
+[registry]
+# Managed MCP servers list (GitHub gateway is entry zero). Outside git in production.
+path = "/path/to/mcp-control-plane-data/REPLACE_ME_registry.toml"
+
+[audit]
+# Control-plane toggle / sign-in audit (JSON lines). Never contains secrets.
+path = "/path/to/mcp-control-plane-data/REPLACE_ME_control-audit.jsonl"
