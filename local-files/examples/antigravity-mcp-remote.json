@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "local-files": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "${env:LOCAL_FILES_MCP_URL}",
+        "--header",
+        "Authorization: Bearer ${env:LOCAL_FILES_MCP_BEARER}"
+      ]
+    }
+  }
+}
