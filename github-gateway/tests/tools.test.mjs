@@ -206,3 +206,39 @@ test('audit log contains no secrets', async () => {
   assert.doesNotMatch(raw, /Bearer /i);
   assert.doesNotMatch(raw, /ghp_|github_pat_|ghs_/);
 });
+
+test('github_issue_comment rejects empty or whitespace body', async () => {
+  const ws = makeTempWorkspace();
+  const state = freshState();
+  seedIssue(state, 'edidasken', 'code', 2);
+  const ctx = createTestContext(ws, state);
+  const result = await ctx.tools.invoke({
+    name: 'github_issue_comment',
+    args: {owner: 'edidasken', repo: 'code', issue_number: 2, body: '   '},
+    clientId: ws.clientId,
+    transport: 'test',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'INVALID_ARGS');
+});
+
+test('github_issue_close rejects invalid state_reason', async () => {
+  const ws = makeTempWorkspace();
+  const state = freshState();
+  seedIssue(state, 'edidasken', 'code', 3);
+  seedLinkedPr(state, 'edidasken', 'code', 3, 301, true);
+  const ctx = createTestContext(ws, state);
+  const result = await ctx.tools.invoke({
+    name: 'github_issue_close',
+    args: {
+      owner: 'edidasken',
+      repo: 'code',
+      issue_number: 3,
+      state_reason: 'duplicate',
+    },
+    clientId: ws.clientId,
+    transport: 'test',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'INVALID_ARGS');
+});
