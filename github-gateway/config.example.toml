@@ -1,0 +1,60 @@
+# Example config for the GitHub MCP gateway (v1 schema).
+# Copy outside the repo, e.g. /path/to/github-mcp-gateway-data/config.toml
+# Replace every REPLACE_ME path. NEVER put a real GitHub PAT or client API key in this file.
+
+version = 1
+
+[transport]
+stdio.enabled = true
+# On the gateway host for remote MCP: set http.enabled = true and public_exposure = "tailscale"
+# (or bind Tailscale IP). Prefer 127.0.0.1 + `tailscale serve` — never 0.0.0.0.
+# Funnel / public exposure is a host-operator decision; this example keeps it off.
+http.enabled = false
+http.bind = "127.0.0.1"
+http.port = 8743
+http.base_path = "/mcp"
+# none | tailscale | funnel — funnel requires the host operator's explicit decision; do not enable silently
+http.public_exposure = "none"
+# Accident brake for funnel (ticket 55+). Leave false unless the host operator acknowledged Funnel.
+http.funnel_acknowledged_by_operator = false
+
+[auth]
+# Hashed client API key store (mode 600). Not the GitHub token.
+keys_path = "/path/to/github-mcp-gateway-data/REPLACE_ME_client-keys.json"
+header = "Authorization"
+bearer_prefix = true
+stdio_require_key = false
+
+[github]
+# Load the PAT from a secure file or macOS Keychain — never inline here.
+# See docs/token-loading.md. Installing the real PAT on the gateway host is a host-operator decision.
+token_source = "file"
+token_file = "/path/to/github-mcp-gateway-data/REPLACE_ME_github-pat"
+# For keychain instead of file (macOS / the gateway host only):
+# token_source = "keychain"
+# keychain_service = "edidasken-github-mcp-gateway"
+# keychain_account = "github-pat"
+# For automated tests/mocks only (never put the real PAT in CI env):
+# token_source = "env"
+# token_env = "GITHUB_MCP_GATEWAY_MOCK_TOKEN"
+api_base = "https://api.github.com"
+user_agent = "edidasken-github-mcp-gateway/1"
+
+[allowlist]
+# Default: edidasken repositories only. Reject everything else.
+repositories = ["edidasken/*"]
+actions = [
+  "github_issue_read",
+  "github_issue_comment",
+  "github_issue_close",
+]
+
+[audit]
+path = "/path/to/github-mcp-gateway-data/REPLACE_ME_audit.jsonl"
+retain_days = 90
+log_issue_bodies = false
+
+[rate_limit]
+per_client_per_minute = 60
+per_client_per_day = 2000
+close_per_client_per_hour = 30
