@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Local / operator secrets and live config (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+config.toml
+!**/config.example.toml
+**/client-keys.json
+**/password.json
+**/sessions.json
+**/*audit*.jsonl
+**/REPLACE_ME*
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
