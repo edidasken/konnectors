@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "local-files": {
+      "url": "${env:LOCAL_FILES_MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${env:LOCAL_FILES_MCP_BEARER}"
+      }
+    }
+  }
+}
