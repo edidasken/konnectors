@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "local-files": {
+      "command": "node",
+      "args": ["/path/to/konnectors/local-files/server.mjs"],
+      "env": {
+        "LOCAL_FILES_ROOT": "/path/to/REPLACE_ME_allowed_root"
+      }
+    }
+  }
+}
