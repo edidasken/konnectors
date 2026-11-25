@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "github-gateway": {
+      "url": "https://REPLACE_ME_gateway_host/mcp",
+      "headers": {
+        "Authorization": "Bearer REPLACE_ME_client_api_key"
+      }
+    }
+  }
+}

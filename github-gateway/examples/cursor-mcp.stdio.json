@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "github-gateway": {
+      "command": "/path/to/node",
+      "args": [
+        "/path/to/konnectors/github-gateway/src/index.js",
+        "--config",
+        "/path/to/github-mcp-gateway-data/config.toml"
+      ]
+    }
+  }
+}

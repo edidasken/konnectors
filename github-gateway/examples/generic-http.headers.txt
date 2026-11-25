@@ -1,0 +1,8 @@
+# Placeholder headers for authenticated Streamable HTTP to the gateway.
+# Copy into your MCP host; never commit a real key.
+#
+# MCP URL:  https://REPLACE_ME_gateway_host/mcp
+# Health:   https://REPLACE_ME_gateway_host/health  (no Authorization)
+
+Authorization: Bearer REPLACE_ME_client_api_key
+Content-Type: application/json
