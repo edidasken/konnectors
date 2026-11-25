@@ -1,0 +1,57 @@
+# Line counts via cloc. Push to main or manual run. Commits docs/LINE-COUNT.md with [skip ci].
+name: line-count
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/LINE-COUNT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: line-count
+  cancel-in-progress: true
+
+jobs:
+  count:
+    if: github.repository_owner == 'edidasken'
+    runs-on: [self-hosted, signal]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Ensure cloc
+        run: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v cloc >/dev/null 2>&1; then
+            brew install cloc
+          fi
+          cloc --version
+
+      - name: Count lines
+        run: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          chmod +x scripts/update-line-count.sh
+          scripts/update-line-count.sh --summary-file "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit LINE-COUNT.md
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/LINE-COUNT.md
+          if git diff --staged --quiet; then
+            echo "No line-count changes."
+            exit 0
+          fi
+          git commit -m "chore: update line counts [skip ci]"
+          git push
