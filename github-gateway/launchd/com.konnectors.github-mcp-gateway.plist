@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for the GitHub MCP gateway on the gateway host (ticket 56 / edidasken/code#62).
+
+  Node binary: /path/to/node  (operator standard prefix /path/to/node-prefix — NOT Homebrew).
+  Config and secrets live under /path/to/github-mcp-gateway-data/ (outside the git worktree).
+
+  Placeholders filled by scripts/install-launchd.sh:
+    __NODE_BIN__   → /path/to/node
+    __GATEWAY_ROOT__ → absolute path to github-gateway in the konnectors checkout
+    __CONFIG__     → /path/to/github-mcp-gateway-data/config.toml
+    __PREFIX__     → /path/to/github-mcp-gateway-data (logs)
+
+  KeepAlive + RunAtLoad: process restarts after crash; loads at login (auto-login covers reboot on the gateway host).
+  This PR ships the definition only — do not bootstrap on the gateway host without host-operator OK.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.konnectors.github-mcp-gateway</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE_BIN__</string>
+    <string>__GATEWAY_ROOT__/src/index.js</string>
+    <string>--config</string>
+    <string>__CONFIG__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__GATEWAY_ROOT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/path/to/node-prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>GITHUB_MCP_GATEWAY_CONFIG</key>
+    <string>__CONFIG__</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>__PREFIX__/gateway.log</string>
+  <key>StandardErrorPath</key>
+  <string>__PREFIX__/gateway.log</string>
+</dict>
+</plist>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for the MCP control plane on the gateway host (ticket 57 / edidasken/code#63).
+
+  Node binary: /path/to/node  (operator standard prefix /path/to/node-prefix — NOT Homebrew).
+  Config lives under /path/to/mcp-control-plane-data/ (outside the git worktree).
+
+  Placeholders filled by scripts/install-control-launchd.sh:
+    __NODE_BIN__
+    __GATEWAY_ROOT__
+    __CONFIG__
+    __PREFIX__
+
+  This PR ships the definition only — do not bootstrap on the gateway host without host-operator OK.
+  Do not enable Funnel for this listener.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.konnectors.mcp-control-plane</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE_BIN__</string>
+    <string>__GATEWAY_ROOT__/control/src/index.js</string>
+    <string>--config</string>
+    <string>__CONFIG__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__GATEWAY_ROOT__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/path/to/node-prefix/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>MCP_CONTROL_CONFIG</key>
+    <string>__CONFIG__</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>__PREFIX__/control.log</string>
+  <key>StandardErrorPath</key>
+  <string>__PREFIX__/control.log</string>
+</dict>
+</plist>
