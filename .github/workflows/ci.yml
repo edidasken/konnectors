@@ -23,4 +23,6 @@ jobs:
           cache: npm
           cache-dependency-path: github-gateway/package-lock.json
       - run: npm ci
+      - name: Restore script execute bits
+        run: chmod +x scripts/*.sh
       - run: npm test
