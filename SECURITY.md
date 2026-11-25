@@ -10,10 +10,11 @@ Nothing personal or sensitive ever goes in this repository: no secrets, tokens, 
 
 ## Expectations for operators
 
-- Keep upstream credentials (for example a GitHub PAT) only on the trusted gateway host.
-- Issue per-client API keys; store hashes at rest; rotate and revoke when needed.
+- Keep upstream credentials (for example a GitHub PAT) and filesystem bearer tokens only on the trusted host.
+- Issue per-client credentials where the package supports them; store hashes or mode-600 secrets at rest; rotate and revoke when needed.
 - Prefer private network reachability; do not enable public exposure without an explicit operator decision.
 - Never paste real secrets into issues, PRs, chat, or docs.
+- Scope `local-files` to an intentional root; treat destructive tools (`delete_path`, `truncate_file`) with care.
 
 ## What this project will not do
 
