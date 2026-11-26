@@ -1,22 +1,28 @@
 /**
- * Load operator config from environment variables only.
+ * Load operator config from environment variables, a shared volumes file,
+ * and optional CLI `--allowed-directory` fallbacks.
  * Placeholders live in .env.example — never commit real values.
  */
 import {existsSync, readFileSync, statSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {
+  defaultVolumesFilePath,
+  readVolumesFile,
+  resolveVolumesFilePath,
+} from './volumes.js';
 
 /**
- * @param {NodeJS.ProcessEnv} env
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {string[]} [argv]
  */
-export function loadConfig(env = process.env) {
-  const rootRaw = (env.LOCAL_FILES_ROOT || '').trim();
-  if (!rootRaw) {
-    throw new Error('LOCAL_FILES_ROOT is required (absolute path to the single allowed filesystem root)');
-  }
-  const root = resolve(rootRaw);
-  if (!existsSync(root) || !statSync(root).isDirectory()) {
-    throw new Error('LOCAL_FILES_ROOT must be an existing directory');
-  }
+export function loadConfig(env = process.env, argv = process.argv.slice(2)) {
+  const cli = parseArgv(argv);
+  const serverId = (env.LOCAL_FILES_SERVER_ID || cli.serverId || 'local-files').trim() || 'local-files';
+  const volumesFile = resolveVolumesFilePath({
+    volumesFile: env.LOCAL_FILES_VOLUMES_FILE || cli.volumesFile || '',
+    serverId,
+  });
+  const roots = resolveRoots({env, cli, volumesFile});
 
   const httpEnabled = truthy(env.LOCAL_FILES_HTTP);
   const bearer = loadBearer(env);
@@ -27,7 +33,11 @@ export function loadConfig(env = process.env) {
   }
 
   return {
-    root,
+    /** @deprecated Prefer `roots`; kept for single-root callers/tests. */
+    root: roots[0],
+    roots,
+    volumesFile,
+    serverId,
     serverName: env.LOCAL_FILES_SERVER_NAME || 'konnectors-local-files',
     http: {
       enabled: httpEnabled,
@@ -47,6 +57,113 @@ export function loadConfig(env = process.env) {
       maxSearchLimit: intOr(env.LOCAL_FILES_MAX_SEARCH_LIMIT, 1000),
     },
   };
+}
+
+/**
+ * Resolution order:
+ * 1. Shared volumes file when it exists (LOCAL_FILES_VOLUMES_FILE or ~/code/mcp/<id>-volumes.conf)
+ * 2. CLI `--allowed-directory` / positional directory args (legacy fallback)
+ * 3. LOCAL_FILES_ROOT (legacy single-root env fallback)
+ *
+ * @param {{env: NodeJS.ProcessEnv, cli: ReturnType<typeof parseArgv>, volumesFile: string}} opts
+ * @returns {string[]}
+ */
+export function resolveRoots({env, cli, volumesFile}) {
+  const fromFile = readVolumesFile(volumesFile);
+  if (fromFile && fromFile.length > 0) {
+    return validateRoots(fromFile, 'volumes file');
+  }
+
+  if (cli.directories.length > 0) {
+    return validateRoots(cli.directories, 'CLI --allowed-directory');
+  }
+
+  const rootRaw = (env.LOCAL_FILES_ROOT || '').trim();
+  if (rootRaw) {
+    return validateRoots([rootRaw], 'LOCAL_FILES_ROOT');
+  }
+
+  const missingHint = existsSync(volumesFile)
+    ? 'volumes file was empty'
+    : `volumes file not found at ${volumesFile}`;
+  throw new Error(
+    `No allowed filesystem roots configured (${missingHint}). ` +
+      `Add paths to ${volumesFile} (default ${defaultVolumesFilePath(env.LOCAL_FILES_SERVER_ID || 'local-files')}), ` +
+      'pass --allowed-directory, or set LOCAL_FILES_ROOT.',
+  );
+}
+
+/**
+ * @param {string[]} rawRoots
+ * @param {string} source
+ * @returns {string[]}
+ */
+function validateRoots(rawRoots, source) {
+  /** @type {string[]} */
+  const roots = [];
+  for (const raw of rawRoots) {
+    const root = resolve(String(raw).trim());
+    if (!existsSync(root) || !statSync(root).isDirectory()) {
+      throw new Error(`${source}: root must be an existing directory: ${raw}`);
+    }
+    roots.push(root);
+  }
+  if (roots.length === 0) {
+    throw new Error(`${source}: at least one allowed directory is required`);
+  }
+  return roots;
+}
+
+/**
+ * @param {string[]} argv
+ */
+export function parseArgv(argv) {
+  /** @type {string[]} */
+  const directories = [];
+  let volumesFile = '';
+  let serverId = '';
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--allowed-directory' || arg === '-d') {
+      const next = argv[++i];
+      if (!next) throw new Error(`${arg} requires a path argument`);
+      directories.push(next);
+      continue;
+    }
+    if (arg.startsWith('--allowed-directory=')) {
+      directories.push(arg.slice('--allowed-directory='.length));
+      continue;
+    }
+    if (arg === '--volumes-file') {
+      const next = argv[++i];
+      if (!next) throw new Error('--volumes-file requires a path argument');
+      volumesFile = next;
+      continue;
+    }
+    if (arg.startsWith('--volumes-file=')) {
+      volumesFile = arg.slice('--volumes-file='.length);
+      continue;
+    }
+    if (arg === '--server-id') {
+      const next = argv[++i];
+      if (!next) throw new Error('--server-id requires a value');
+      serverId = next;
+      continue;
+    }
+    if (arg.startsWith('--server-id=')) {
+      serverId = arg.slice('--server-id='.length);
+      continue;
+    }
+    if (arg === '--help' || arg === '-h') {
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      throw new Error(`unknown argument: ${arg}`);
+    }
+    // Positional directory args — legacy filesystem-server style fallback.
+    directories.push(arg);
+  }
+  return {directories, volumesFile, serverId};
 }
 
 /**

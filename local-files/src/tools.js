@@ -1,7 +1,8 @@
 /**
  * Filesystem tool implementations for the local-files MCP bridge/adapter.
- * Paths are relative to the single configured root. Symlinks are not followed
- * for authorization; write/delete require explicit confirms where noted.
+ * Paths resolve under the configured allowed roots (shared volumes file, CLI,
+ * or LOCAL_FILES_ROOT). Symlinks are not followed for authorization;
+ * write/delete require explicit confirms where noted.
  */
 import {
   chmodSync,
@@ -20,14 +21,23 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import {basename, dirname, join} from 'node:path';
-import {displayPath, resolveUnderRoot} from './paths.js';
+import {basename, dirname, join, resolve} from 'node:path';
+import {displayInRoots, resolveInRoots} from './paths.js';
 
 /**
- * @param {ReturnType<import('./config.js').loadConfig>} config
+ * @param {ReturnType<import('./config.js').loadConfig> | {root?: string, roots?: string[], limits: object}} config
  */
 export function createToolRunner(config) {
-  const {root, limits} = config;
+  const roots = normalizeRoots(config);
+  const limits = config.limits;
+
+  function resolvePath(relOrAbs) {
+    return resolveInRoots(roots, relOrAbs);
+  }
+
+  function show(root, absolutePath) {
+    return displayInRoots(roots, root, absolutePath);
+  }
 
   return {
     listTools() {
@@ -99,11 +109,12 @@ export function createToolRunner(config) {
   }
 
   function listAllowedDirectories() {
-    return {directories: [displayPath(root, root) === '.' ? '/' : displayPath(root, root)], root: '/'};
+    const directories = roots.map((r) => (roots.length === 1 ? '/' : resolve(r)));
+    return {directories, root: directories[0]};
   }
 
   function listDirectory(args) {
-    const dir = resolveUnderRoot(root, /** @type {string} */ (args.path || ''));
+    const {absolute: dir, root} = resolvePath(/** @type {string} */ (args.path || ''));
     const limit = clampInt(args.limit, 1, limits.maxListLimit, 100);
     const offset = Math.max(0, Number(args.offset) || 0);
     const entries = readdirSync(dir, {withFileTypes: true})
@@ -117,7 +128,7 @@ export function createToolRunner(config) {
         } catch {
           /* ignore */
         }
-        return {name: e.name, type: kind, path: displayPath(root, abs)};
+        return {name: e.name, type: kind, path: show(root, abs)};
       })
       .sort((a, b) => a.name.localeCompare(b.name));
     const slice = entries.slice(offset, offset + limit);
@@ -125,25 +136,26 @@ export function createToolRunner(config) {
   }
 
   function directoryTree(args) {
-    const start = resolveUnderRoot(root, /** @type {string} */ (args.path || ''));
+    const {absolute: start, root} = resolvePath(/** @type {string} */ (args.path || ''));
     const depth = clampInt(args.depth, 0, limits.maxTreeDepth, 3);
     const limit = clampInt(args.limit, 1, limits.maxListLimit, 200);
     const offset = Math.max(0, Number(args.offset) || 0);
     /** @type {object[]} */
     const flat = [];
-    walkTree(start, 0, depth, flat, limit + offset);
+    walkTree(start, root, 0, depth, flat, limit + offset);
     const slice = flat.slice(offset, offset + limit);
     return {entries: slice, total: flat.length, offset, limit, depth};
   }
 
   /**
    * @param {string} dir
+   * @param {string} root
    * @param {number} level
    * @param {number} maxDepth
    * @param {object[]} out
    * @param {number} hardCap
    */
-  function walkTree(dir, level, maxDepth, out, hardCap) {
+  function walkTree(dir, root, level, maxDepth, out, hardCap) {
     if (out.length >= hardCap) return;
     let names;
     try {
@@ -156,9 +168,9 @@ export function createToolRunner(config) {
       if (out.length >= hardCap) return;
       const abs = join(dir, e.name);
       const type = e.isDirectory() ? 'directory' : e.isSymbolicLink() ? 'symlink' : e.isFile() ? 'file' : 'other';
-      out.push({name: e.name, type, path: displayPath(root, abs), depth: level});
+      out.push({name: e.name, type, path: show(root, abs), depth: level});
       if (type === 'directory' && level < maxDepth) {
-        walkTree(abs, level + 1, maxDepth, out, hardCap);
+        walkTree(abs, root, level + 1, maxDepth, out, hardCap);
       }
     }
   }
@@ -166,17 +178,17 @@ export function createToolRunner(config) {
   function searchFiles(args) {
     const query = String(args.query || '');
     if (!query) throw new Error('query is required');
-    const start = resolveUnderRoot(root, /** @type {string} */ (args.path || ''));
+    const {absolute: start, root} = resolvePath(/** @type {string} */ (args.path || ''));
     const maxDepth = clampInt(args.maxDepth, 0, limits.maxTreeDepth, 10);
     const limit = clampInt(args.limit, 1, limits.maxSearchLimit, 100);
     const q = query.toLowerCase();
     /** @type {object[]} */
     const hits = [];
-    searchWalk(start, 0, maxDepth, q, hits, limit);
+    searchWalk(start, root, 0, maxDepth, q, hits, limit);
     return {matches: hits, query, limit};
   }
 
-  function searchWalk(dir, level, maxDepth, q, hits, limit) {
+  function searchWalk(dir, root, level, maxDepth, q, hits, limit) {
     if (hits.length >= limit) return;
     let names;
     try {
@@ -191,21 +203,21 @@ export function createToolRunner(config) {
         hits.push({
           name: e.name,
           type: e.isDirectory() ? 'directory' : e.isFile() ? 'file' : 'other',
-          path: displayPath(root, abs),
+          path: show(root, abs),
         });
       }
       if (e.isDirectory() && level < maxDepth) {
-        searchWalk(abs, level + 1, maxDepth, q, hits, limit);
+        searchWalk(abs, root, level + 1, maxDepth, q, hits, limit);
       }
     }
   }
 
   function getFileInfo(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     if (!existsSync(abs)) throw new Error('path not found');
     const st = statSync(abs);
     return {
-      path: displayPath(root, abs),
+      path: show(root, abs),
       type: st.isDirectory() ? 'directory' : st.isFile() ? 'file' : 'other',
       size: st.size,
       mode: st.mode,
@@ -222,7 +234,7 @@ export function createToolRunner(config) {
   }
 
   function setFileInfo(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs} = resolvePath(requireString(args.path, 'path'));
     if (!existsSync(abs)) throw new Error('path not found');
     if (args.mode != null) {
       const mode = Number(args.mode);
@@ -244,7 +256,7 @@ export function createToolRunner(config) {
   }
 
   function readFile(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const st = statSync(abs);
     if (!st.isFile()) throw new Error('not a file');
     if (st.size > limits.maxReadBytes) {
@@ -253,14 +265,14 @@ export function createToolRunner(config) {
     const buf = readFileSync(abs);
     if (isProbablyBinary(buf)) {
       return {
-        path: displayPath(root, abs),
+        path: show(root, abs),
         encoding: 'base64',
         content: buf.toString('base64'),
         bytes: buf.length,
       };
     }
     return {
-      path: displayPath(root, abs),
+      path: show(root, abs),
       encoding: 'utf8',
       content: buf.toString('utf8'),
       bytes: buf.length,
@@ -268,7 +280,7 @@ export function createToolRunner(config) {
   }
 
   function readTextFile(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const st = statSync(abs);
     if (!st.isFile()) throw new Error('not a file');
     if (st.size > limits.maxMultiReadBytes) {
@@ -277,7 +289,7 @@ export function createToolRunner(config) {
     const buf = readFileSync(abs);
     if (isProbablyBinary(buf)) throw new Error('binary files are rejected');
     return {
-      path: displayPath(root, abs),
+      path: show(root, abs),
       encoding: 'utf8',
       content: buf.toString('utf8'),
       bytes: buf.length,
@@ -285,7 +297,7 @@ export function createToolRunner(config) {
   }
 
   function readFileChunk(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const offset = Math.max(0, Number(args.offset) || 0);
     const length = clampInt(args.length, 1, limits.maxChunkBytes, limits.maxChunkBytes);
     const st = statSync(abs);
@@ -295,7 +307,7 @@ export function createToolRunner(config) {
       const buf = Buffer.alloc(Math.min(length, Math.max(0, st.size - offset)));
       const n = readSync(fd, buf, 0, buf.length, offset);
       return {
-        path: displayPath(root, abs),
+        path: show(root, abs),
         offset,
         length: n,
         totalSize: st.size,
@@ -316,14 +328,14 @@ export function createToolRunner(config) {
     /** @type {object[]} */
     const files = [];
     for (const p of paths) {
-      const abs = resolveUnderRoot(root, String(p));
+      const {absolute: abs, root} = resolvePath(String(p));
       const st = statSync(abs);
       if (!st.isFile()) throw new Error(`not a file: ${p}`);
       if (st.size > limits.maxMultiReadBytes) throw new Error(`file too large: ${p}`);
       const buf = readFileSync(abs);
       if (isProbablyBinary(buf)) throw new Error(`binary rejected: ${p}`);
       files.push({
-        path: displayPath(root, abs),
+        path: show(root, abs),
         encoding: 'utf8',
         content: buf.toString('utf8'),
         bytes: buf.length,
@@ -333,7 +345,7 @@ export function createToolRunner(config) {
   }
 
   function writeFile(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const overwrite = Boolean(args.overwrite);
     if (existsSync(abs) && !overwrite) {
       throw new Error('file exists; pass overwrite=true to replace');
@@ -343,11 +355,11 @@ export function createToolRunner(config) {
     const content = args.content == null ? '' : String(args.content);
     const buf = encoding === 'base64' ? Buffer.from(content, 'base64') : Buffer.from(content, 'utf8');
     writeFileSync(abs, buf);
-    return {path: displayPath(root, abs), bytes: buf.length, overwritten: existsSync(abs)};
+    return {path: show(root, abs), bytes: buf.length, overwritten: existsSync(abs)};
   }
 
   function writeFileChunk(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const offset = Math.max(0, Number(args.offset) || 0);
     const content = requireString(args.content, 'content');
     const buf = Buffer.from(content, 'base64');
@@ -359,11 +371,11 @@ export function createToolRunner(config) {
     } finally {
       closeSync(fd);
     }
-    return {path: displayPath(root, abs), offset, bytesWritten: buf.length};
+    return {path: show(root, abs), offset, bytesWritten: buf.length};
   }
 
   function editFile(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const oldText = requireString(args.oldText, 'oldText');
     const newText = args.newText == null ? '' : String(args.newText);
     const text = readFileSync(abs, 'utf8');
@@ -373,11 +385,11 @@ export function createToolRunner(config) {
     if (second >= 0) throw new Error('oldText appears more than once');
     const next = text.slice(0, first) + newText + text.slice(first + oldText.length);
     writeFileSync(abs, next, 'utf8');
-    return {path: displayPath(root, abs), bytes: Buffer.byteLength(next, 'utf8')};
+    return {path: show(root, abs), bytes: Buffer.byteLength(next, 'utf8')};
   }
 
   function truncateFile(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const confirmPath = requireString(args.confirmPath, 'confirmPath');
     if (String(args.path) !== confirmPath) {
       throw new Error('confirmPath must exactly match path');
@@ -391,18 +403,24 @@ export function createToolRunner(config) {
     } finally {
       closeSync(fd);
     }
-    return {path: displayPath(root, abs), size};
+    return {path: show(root, abs), size};
   }
 
   function createDirectory(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     mkdirSync(abs, {recursive: true});
-    return {path: displayPath(root, abs), created: true};
+    return {path: show(root, abs), created: true};
   }
 
   function movePath(args) {
-    const from = resolveUnderRoot(root, requireString(args.from, 'from'));
-    const to = resolveUnderRoot(root, requireString(args.to, 'to'));
+    const fromRes = resolvePath(requireString(args.from, 'from'));
+    const toRes = resolvePath(requireString(args.to, 'to'));
+    if (fromRes.root !== toRes.root) {
+      throw new Error('move_path must stay within the same allowed volume');
+    }
+    const from = fromRes.absolute;
+    const to = toRes.absolute;
+    const root = fromRes.root;
     const overwrite = Boolean(args.overwrite);
     if (!existsSync(from)) throw new Error('from not found');
     if (existsSync(to)) {
@@ -414,14 +432,14 @@ export function createToolRunner(config) {
     mkdirSync(dirname(to), {recursive: true});
     renameSync(from, to);
     return {
-      from: displayPath(root, from),
-      to: displayPath(root, to),
+      from: show(root, from),
+      to: show(root, to),
       name: basename(to),
     };
   }
 
   function deletePath(args) {
-    const abs = resolveUnderRoot(root, requireString(args.path, 'path'));
+    const {absolute: abs, root} = resolvePath(requireString(args.path, 'path'));
     const confirmPath = requireString(args.confirmPath, 'confirmPath');
     if (String(args.path) !== confirmPath) {
       throw new Error('confirmPath must exactly match path');
@@ -434,8 +452,20 @@ export function createToolRunner(config) {
     } else {
       rmSync(abs);
     }
-    return {path: displayPath(root, abs), deleted: true};
+    return {path: show(root, abs), deleted: true};
   }
+}
+
+/**
+ * @param {{root?: string, roots?: string[]}} config
+ * @returns {string[]}
+ */
+function normalizeRoots(config) {
+  if (Array.isArray(config.roots) && config.roots.length > 0) {
+    return config.roots.map((r) => resolve(r));
+  }
+  if (config.root) return [resolve(config.root)];
+  throw new Error('config.roots or config.root is required');
 }
 
 export const TOOL_NAMES = [

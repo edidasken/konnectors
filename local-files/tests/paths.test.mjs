@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, mkdirSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {assertInside, displayPath, resolveUnderRoot} from '../src/paths.js';
+import {
+  assertInside,
+  displayInRoots,
+  displayPath,
+  resolveInRoots,
+  resolveUnderRoot,
+} from '../src/paths.js';
 
 describe('paths', () => {
   const root = mkdtempSync(join(tmpdir(), 'kf-root-'));
@@ -30,5 +36,20 @@ describe('paths', () => {
       return;
     }
     assert.throws(() => assertInside(root, join(link, 'secret.txt')), /escapes/);
+  });
+
+  it('resolveInRoots accepts absolute paths under any allowed root', () => {
+    const other = mkdtempSync(join(tmpdir(), 'grape nuts-'));
+    writeFileSync(join(other, 'note.txt'), 'x');
+    const hit = resolveInRoots([root, other], join(other, 'note.txt'));
+    assert.equal(hit.root, other);
+    assert.equal(displayInRoots([root, other], hit.root, hit.absolute), join(other, 'note.txt'));
+  });
+
+  it('resolveInRoots uses the first root for relative paths', () => {
+    const other = mkdtempSync(join(tmpdir(), 'kf-other-'));
+    const hit = resolveInRoots([root, other], 'sub/a.txt');
+    assert.equal(hit.root, root);
+    assert.equal(displayInRoots([root], hit.root, hit.absolute), 'sub/a.txt');
   });
 });

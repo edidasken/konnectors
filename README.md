@@ -9,7 +9,7 @@ Konnectors is a collection of MCP bridges/adapters for connectors that are missi
 | Path | Status |
 |------|--------|
 | [`github-gateway/`](github-gateway/) | GitHub Issues MCP gateway (v0.1.0) — read, comment, close on allowlisted repos with a server-side PAT |
-| [`local-files/`](local-files/) | Local-files MCP bridge/adapter (v0.2.0) — scoped filesystem tools over stdio or authenticated HTTP |
+| [`local-files/`](local-files/) | Local-files MCP bridge/adapter (v0.3.0) — scoped filesystem tools over stdio or authenticated HTTP |
 | _(future)_ | Room for more MCP bridge/adapter packages |
 
 ## Strict rule (permanent)
@@ -52,7 +52,9 @@ npm install
 npm test
 ```
 
-Export variables from [`local-files/.env.example`](local-files/.env.example) (outside git), then:
+Preferred: copy [`local-files/examples/local-files-volumes.conf.example`](local-files/examples/local-files-volumes.conf.example) and [`local-files/examples/local-files.sh.example`](local-files/examples/local-files.sh.example) to a shared MCP config directory outside git (default `~/code/mcp/`), then point MCP clients at the launch script only. Adding a volume is a one-line edit to the volumes file plus a restart.
+
+Legacy single-root installs still work via `LOCAL_FILES_ROOT` or `--allowed-directory` (see [`local-files/.env.example`](local-files/.env.example)):
 
 ```bash
 node server.mjs
@@ -67,7 +69,8 @@ Package docs: [`local-files/README.md`](local-files/README.md) and [`local-files
 | Gateway config | Outside git — start from `github-gateway/config.example.toml` |
 | Client API keys (gateway) | Outside git — issued by `github-gateway/scripts/issue-client-key.js` |
 | GitHub PAT | Outside git — file or Keychain on the gateway host only |
-| local-files root + bearer | Outside git — `LOCAL_FILES_ROOT`, `LOCAL_FILES_BEARER_TOKEN_FILE` (see `.env.example`) |
+| local-files volumes + launch script | Outside git — shared `~/code/mcp/<id>-volumes.conf` + launch script (see package examples) |
+| local-files legacy root + bearer | Outside git — `LOCAL_FILES_ROOT`, `LOCAL_FILES_BEARER_TOKEN_FILE` (see `.env.example`) |
 | Env overrides | Documented in package docs; examples use placeholders only |
 
 ## Example client configs

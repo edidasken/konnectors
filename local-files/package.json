@@ -1,6 +1,6 @@
 {
   "name": "konnectors-local-files",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Konnectors local-files MCP bridge/adapter — scoped filesystem tools over stdio or authenticated HTTP",

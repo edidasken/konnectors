@@ -1,0 +1,14 @@
+# Example allowed-volume list for konnectors local-files.
+#
+# Copy outside the repo, for example:
+#   ~/code/mcp/local-files-volumes.conf
+#
+# One absolute path per line. Blank lines and # comments are ignored.
+# Paths may contain spaces. Optional surrounding double quotes are stripped.
+# Never commit a machine-specific copy of this file.
+#
+# Adding a volume: append one line, then restart the MCP server / launch script.
+
+/path/to/REPLACE_ME_volume_one
+/path/to/REPLACE_ME_volume_two
+"/path/to/REPLACE_ME volume with spaces"
