@@ -11,7 +11,7 @@ import {z} from 'zod';
 export function createMcpServer(toolRunner, meta = {}) {
   const server = new McpServer({
     name: meta.name || 'konnectors-local-files',
-    version: meta.version || '0.2.0',
+    version: meta.version || '0.3.0',
   });
 
   const path = z.string();
@@ -20,7 +20,7 @@ export function createMcpServer(toolRunner, meta = {}) {
 
   server.tool(
     'list_allowed_directories',
-    'Show the one allowed filesystem root.',
+    'Show the allowed filesystem roots (from the shared volumes file or legacy fallbacks).',
     {},
     async () => respond(toolRunner, 'list_allowed_directories', {}),
   );

@@ -1,9 +1,9 @@
 /**
- * Resolve and enforce a single allowed filesystem root.
+ * Resolve and enforce allowed filesystem roots.
  * Symlinks are never followed for authorization decisions.
  */
 import {lstatSync, realpathSync, existsSync} from 'node:fs';
-import {dirname, join, normalize, resolve, relative, sep} from 'node:path';
+import {dirname, join, normalize, resolve, relative, sep, isAbsolute} from 'node:path';
 
 /**
  * @param {string} root
@@ -15,6 +15,41 @@ export function resolveUnderRoot(root, relPath = '') {
   const candidate = cleaned ? resolve(rootResolved, cleaned) : rootResolved;
   assertInside(rootResolved, candidate);
   return candidate;
+}
+
+/**
+ * Resolve a tool path against one or more allowed roots.
+ * Relative paths (and empty/`/`) use the first root. Absolute paths must fall
+ * under exactly one allowed root.
+ *
+ * @param {string[]} roots
+ * @param {string} [relOrAbs]
+ * @returns {{absolute: string, root: string}}
+ */
+export function resolveInRoots(roots, relOrAbs = '') {
+  if (!Array.isArray(roots) || roots.length === 0) {
+    throw new Error('no allowed filesystem roots configured');
+  }
+  const cleaned = String(relOrAbs ?? '').trim();
+  if (!cleaned || cleaned === '/' || cleaned === '.') {
+    const root = resolve(roots[0]);
+    return {absolute: root, root};
+  }
+  if (isAbsolute(cleaned)) {
+    const abs = resolve(cleaned);
+    for (const candidate of roots) {
+      const root = resolve(candidate);
+      try {
+        assertInside(root, abs);
+        return {absolute: abs, root};
+      } catch {
+        /* try next root */
+      }
+    }
+    throw new Error('path escapes allowed root');
+  }
+  const root = resolve(roots[0]);
+  return {absolute: resolveUnderRoot(root, cleaned), root};
 }
 
 /**
@@ -61,6 +96,22 @@ export function assertInside(root, absolutePath) {
 export function displayPath(root, absolutePath) {
   const rel = relative(resolve(root), resolve(absolutePath));
   return rel.split(sep).join('/') || '.';
+}
+
+/**
+ * Display path for tool results. Single-root installs keep relative paths;
+ * multi-root installs return absolute paths so the volume is unambiguous.
+ *
+ * @param {string[]} roots
+ * @param {string} root
+ * @param {string} absolutePath
+ */
+export function displayInRoots(roots, root, absolutePath) {
+  if (roots.length === 1) {
+    const rel = displayPath(root, absolutePath);
+    return rel === '.' ? '/' : rel;
+  }
+  return resolve(absolutePath);
 }
 
 /**

@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "local-files": {
+      "command": "/path/to/REPLACE_ME/code/mcp/local-files.sh"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Example launch script for konnectors local-files.
+#
+# Copy outside the repo to the shared MCP config dir, for example:
+#   ~/code/mcp/local-files.sh
+#   chmod +x ~/code/mcp/local-files.sh
+#
+# Point MCP clients (Cursor, Antigravity, …) at this script only.
+# Do not put allowed-volume paths in client configs — keep them in the
+# sibling volumes file (default ~/code/mcp/local-files-volumes.conf).
+#
+# Never commit a machine-specific copy of this file.
+
+set -euo pipefail
+
+# Shared volumes list (override with LOCAL_FILES_VOLUMES_FILE if needed).
+export LOCAL_FILES_VOLUMES_FILE="${LOCAL_FILES_VOLUMES_FILE:-${HOME}/code/mcp/local-files-volumes.conf}"
+
+# Absolute path to the checked-out konnectors local-files package.
+SERVER_JS="/path/to/REPLACE_ME/konnectors/local-files/server.mjs"
+
+exec node "${SERVER_JS}" "$@"
